@@ -90,7 +90,7 @@ with st.sidebar:
     st.caption(f"対象：東証プライム（内国株式）{len(companies):,}社")
 
 title_days = str(max_streak_days)
-st.title(f"東証プライムで現在の株価から{title_days}日以上下落しなかった銘柄")
+st.title(f"現在の株価から{title_days}日以上下落しなかった銘柄【東証プライム】")
 st.caption(
     f"東証プライム全社から、現在株価以下だった最長の連続期間が"
     f"{title_days}日以内の企業を探します。"
@@ -144,7 +144,6 @@ if run:
                         "現在株価（円）": round(current_price),
                         "最長日数": days,
                         "開始日": format_date(first),
-                        "終了日": format_date(last),
                         "期間中最安値（円）": round(minimum) if minimum is not None else None,
                     }
                 )
@@ -168,9 +167,34 @@ if run:
         result = result.sort_values(
             ["最長日数", "証券コード"], ascending=[False, True]
         ).reset_index(drop=True)
+        result["下落率（%）"] = (
+            (result["期間中最安値（円）"] / result["現在株価（円）"] - 1) * 100
+        ).round(1)
         st.success(f"条件に一致した企業：{len(result):,}社")
+        display_result = result.copy()
+        lowest_price_column = "期間中最安値・下落率"
+        display_result[lowest_price_column] = result.apply(
+            lambda row: (
+                f"{int(row['期間中最安値（円）']):,}円"
+                f"（{row['下落率（%）']:.1f}%）"
+            ),
+            axis=1,
+        )
+        display_result = display_result.drop(
+            columns=["期間中最安値（円）", "下落率（%）"]
+        )
+        cell_styles = pd.DataFrame(
+            "", index=display_result.index, columns=display_result.columns
+        )
+        lowest_price_is_10_percent_lower = (
+            result["期間中最安値（円）"] < result["現在株価（円）"] * 0.9
+        )
+        cell_styles.loc[
+            lowest_price_is_10_percent_lower, lowest_price_column
+        ] = "color: #DC2626; font-weight: 700;"
+        styled_result = display_result.style.apply(lambda _: cell_styles, axis=None)
         st.dataframe(
-            result,
+            styled_result,
             hide_index=True,
             width="stretch",
             height=min(800, 38 * (len(result) + 1) + 4),
@@ -179,7 +203,7 @@ if run:
                 "企業名": st.column_config.TextColumn(width="medium"),
                 "現在株価（円）": st.column_config.NumberColumn(format="%d円"),
                 "最長日数": st.column_config.NumberColumn(format="%d日"),
-                "期間中最安値（円）": st.column_config.NumberColumn(format="%d円"),
+                lowest_price_column: st.column_config.TextColumn(width="medium"),
             },
         )
         csv = result.to_csv(index=False).encode("utf-8-sig")
@@ -193,4 +217,7 @@ if run:
     if failed:
         with st.expander(f"取得できなかった企業（{len(failed):,}社）"):
             st.write("、".join(failed))
+
+st.divider()
+st.markdown("制作者：木星在住　[Twitter](https://x.com/mokuseidayo)")
 
