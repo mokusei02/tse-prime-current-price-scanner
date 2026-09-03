@@ -69,25 +69,64 @@ def format_date(value: date | None) -> str:
     return value.strftime("%Y年%m月%d日") if value else "—"
 
 
+def render_search_controls(key_prefix: str, company_count: int):
+    start = st.date_input(
+        "検索開始日", value=date(2015, 1, 1), key=f"{key_prefix}_start"
+    )
+    end = st.date_input(
+        "検索終了日", value=date.today(), key=f"{key_prefix}_end"
+    )
+    require_three_years_value = st.checkbox(
+        "上場から3年以上", value=True, key=f"{key_prefix}_three_years"
+    )
+    streak_days = st.selectbox(
+        "下落日数",
+        options=[30, 60, 90],
+        index=0,
+        format_func=lambda days: f"{days}日",
+        key=f"{key_prefix}_days",
+    )
+    submitted = st.button(
+        "全社を検索する",
+        type="primary",
+        width="stretch",
+        key=f"{key_prefix}_run",
+    )
+    st.caption(f"対象：東証プライム（内国株式）{company_count:,}社")
+    return start, end, require_three_years_value, streak_days, submitted
+
+
 st.set_page_config(
     page_title="東証プライム下落期間スクリーナー",
     page_icon="📊",
     layout="wide",
 )
+st.markdown(
+    """
+    <style>
+    .st-key-mobile_filters { display: none; }
+    @media (max-width: 768px) {
+        .st-key-mobile_filters { display: block; }
+        section[data-testid="stSidebar"] { display: none; }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 companies = load_companies()
+
+with st.container(key="mobile_filters"):
+    st.header("検索条件")
+    mobile_values = render_search_controls("mobile", len(companies))
+
 with st.sidebar:
     st.header("検索条件")
-    start_date = st.date_input("検索開始日", value=date(2015, 1, 1))
-    end_date = st.date_input("検索終了日", value=date.today())
-    require_three_years = st.checkbox("上場から3年以上", value=True)
-    max_streak_days = st.selectbox(
-        "下落日数",
-        options=[30, 60, 90],
-        index=0,
-        format_func=lambda days: f"{days}日",
-    )
-    run = st.button("全社を検索する", type="primary", width="stretch")
-    st.caption(f"対象：東証プライム（内国株式）{len(companies):,}社")
+    desktop_values = render_search_controls("desktop", len(companies))
+
+if mobile_values[-1]:
+    start_date, end_date, require_three_years, max_streak_days, run = mobile_values
+else:
+    start_date, end_date, require_three_years, max_streak_days, run = desktop_values
 
 title_days = str(max_streak_days)
 st.title(f"現在の株価から{title_days}日以上下落しなかった銘柄【東証プライム】")
